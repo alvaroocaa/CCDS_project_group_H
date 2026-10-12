@@ -1,0 +1,154 @@
+# App stack, PRODUCTION version for Docker Swarm.
+#
+# Build and push images to the registry:
+#   docker compose -f production.yml build
+#   docker compose -f production.yml push
+# Deploy (stack name "app"):
+#   docker stack deploy -c production.yml app
+#
+# Expects from the basic stack (part A):
+#   - overlay network "proxy" (attachable), created by the basic stack
+#   - the NFS share mounted on every node at ${NFS_ROOT} (default /mnt/nfs),
+#     with a writable folder app-backups/ inside it
+#   - one node labelled db=true:  docker node update --label-add db=true <node>
+# Nginx reaches us as app_core:8000 and app_static:80 on the proxy network.
+
+services:
+  core:
+    image: ${REGISTRY:-localhost:5000}/ccds/core-app:3
+    build:
+      context: core
+    environment:
+      - DB_HOST=db
+      - DB_NAME=ratings
+      - DB_USER=ratings
+      - DB_PASSWORD_FILE=/run/secrets/db_password   # password never in env or image
+      - REDIS_HOST=redis
+      - SMTP_HOST=smtp
+    secrets:
+      - db_password
+    networks:
+      - proxy          # nginx, grafana and smtp live here
+      - backend        # db and redis live here
+    deploy:
+      replicas: 3      # spread over the nodes: one node can die, the app stays up
+      update_config:   # rolling update: one replica at a time, zero downtime
+        parallelism: 1
+        delay: 10s
+        order: start-first        # start the new replica before stopping the old one
+        failure_action: rollback  # new version unhealthy? swarm goes back automatically
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        order: start-first
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits: {cpus: "0.50", memory: 256M}
+      placement:
+        max_replicas_per_node: 2  # never put all eggs in one basket
+
+  static:
+    image: ${REGISTRY:-localhost:5000}/ccds/static:1
+    build:
+      context: static
+    networks:
+      - proxy
+    deploy:
+      replicas: 2
+      update_config: {parallelism: 1, delay: 5s, order: start-first, failure_action: rollback}
+      resources:
+        limits: {cpus: "0.25", memory: 64M}
+
+  auto:
+    image: ${REGISTRY:-localhost:5000}/ccds/auto-feeder:1
+    build:
+      context: auto
+    environment:
+      - CORE_URL=http://core:8000
+      - INTERVAL_SECONDS=5
+    networks:
+      - backend        # reaches core over the private network, not through nginx
+    deploy:
+      replicas: 1      # scalable: more replicas = more fake traffic
+      resources:
+        limits: {cpus: "0.10", memory: 32M}
+
+  db:
+    image: postgres:17
+    environment:
+      - POSTGRES_DB=ratings
+      - POSTGRES_USER=ratings
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db_password
+    secrets:
+      - db_password
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ratings -d ratings"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      replicas: 1      # a plain Postgres cannot scale by adding replicas
+      placement:
+        constraints:
+          - node.labels.db == true   # always the same node, so it finds its local volume
+      restart_policy:
+        condition: any
+      resources:
+        limits: {cpus: "1.0", memory: 512M}
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb",
+              "--maxmemory-policy", "allkeys-lru"]
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+    deploy:
+      replicas: 1      # one shared cache; if it dies the app falls back to the db
+      resources:
+        limits: {cpus: "0.25", memory: 96M}
+
+  backup:
+    image: ${REGISTRY:-localhost:5000}/ccds/db-backup:2
+    build:
+      context: backup
+    environment:
+      - PGHOST=db
+      - PGDATABASE=ratings
+      - PGUSER=ratings
+      - PGPASSWORD_FILE=/run/secrets/db_password
+      - BACKUP_INTERVAL=3600   # hourly: RPO = 1 hour
+      - BACKUP_KEEP=48         # two days of history
+    secrets:
+      - db_password
+    volumes:
+      # On NFS, NOT next to the db: if the db node burns, the backups survive
+      - ${NFS_ROOT:-/mnt/nfs}/app-backups:/backups
+    networks:
+      - backend
+    deploy:
+      replicas: 1      # cron-like job: never scale, two copies would double the dumps
+      resources:
+        limits: {cpus: "0.25", memory: 128M}
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt   # git-ignored; copy from db_password.txt.example
+
+networks:
+  proxy:
+    external: true     # owned by the basic stack, shared by every stack
+  backend:
+    driver: overlay    # spans all swarm nodes
+    internal: true     # no route to the internet: db and redis only talk inside
+
+volumes:
+  db_data:             # local volume on the db=true node (databases on NFS are risky)

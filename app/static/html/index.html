@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Page Ratings</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <h1>Page Ratings</h1>
+    <p>Top rated pages, served live by the core app.</p>
+    <table id="board"><tr><th>Page</th><th>Average</th><th>Votes</th></tr></table>
+    <p id="status"></p>
+  </main>
+  <script>
+    // Relative URL: works once nginx routes /app/ to the core app.
+    fetch("/app/leaderboard")
+      .then(r => r.json())
+      .then(rows => rows.forEach(r => {
+        document.getElementById("board").insertAdjacentHTML("beforeend",
+          `<tr><td>${r.page}</td><td>${r.avg}</td><td>${r.votes}</td></tr>`);
+      }))
+      .catch(() => {
+        document.getElementById("status").textContent =
+          "Leaderboard not reachable (expected until nginx routes /app/).";
+      });
+  </script>
+</body>
+</html>
