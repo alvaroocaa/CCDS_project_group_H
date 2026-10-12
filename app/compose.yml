@@ -1,0 +1,88 @@
+# App stack, LOCAL version (no TLS, no NFS, no nginx yet).
+# Run from this folder:  docker compose up -d --build
+# Then try:              curl localhost:8000/        (core app)
+#                        open http://localhost:8080   (static page)
+
+services:
+  core:
+    image: ccds/core-app:3          # :3 = 503 on db errors; tags let us roll forward/back
+    build:
+      context: core
+    environment:
+      - DB_HOST=db
+      - DB_NAME=ratings
+      - DB_USER=ratings
+      - DB_PASSWORD=ratings         # local only; production uses a Docker secret
+      - REDIS_HOST=redis
+      - SMTP_HOST=smtp              # provided by part D; mail just fails quietly until then
+    ports:
+      - "8000:8000"                 # local testing only; in production nginx is the only way in
+    depends_on:
+      - db
+      - redis
+    networks:
+      - default
+      - backend
+
+  db:
+    image: postgres:17
+    environment:
+      - POSTGRES_DB=ratings
+      - POSTGRES_USER=ratings
+      - POSTGRES_PASSWORD=ratings
+    volumes:
+      - db_data:/var/lib/postgresql/data   # critical data: survives container removal
+    networks:
+      - backend                     # not reachable from the proxy network
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]  # pure cache, no disk
+    networks:
+      - backend
+
+  auto:
+    image: ccds/auto-feeder:1
+    build:
+      context: auto
+    environment:
+      - CORE_URL=http://core:8000
+      - INTERVAL_SECONDS=5
+    depends_on:
+      - core
+    networks:
+      - default                     # only needs to reach core, never the db
+
+  static:
+    image: ccds/static:1
+    build:
+      context: static
+    ports:
+      - "8080:80"                   # local testing only
+    networks:
+      - default
+
+  backup:
+    image: ccds/db-backup:2
+    build:
+      context: backup
+    environment:
+      - PGHOST=db
+      - PGDATABASE=ratings
+      - PGUSER=ratings
+      - PGPASSWORD=ratings          # local only; production uses a Docker secret
+      - BACKUP_INTERVAL=60          # every minute locally so you can see it work
+      - BACKUP_KEEP=10
+    volumes:
+      - backups:/backups
+    depends_on:
+      - db
+    networks:
+      - backend
+
+networks:
+  backend:
+
+volumes:
+  db_data:
+  backups:
