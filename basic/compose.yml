@@ -1,0 +1,11 @@
+services:
+  nginx:
+    build: ./nginx
+    ports:
+      - "80:80"
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true
