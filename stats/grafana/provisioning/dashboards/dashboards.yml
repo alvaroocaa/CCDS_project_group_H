@@ -1,0 +1,11 @@
+# Load every dashboard JSON file from /etc/grafana/dashboards into folder "CCDS".
+apiVersion: 1
+
+providers:
+  - name: ccds
+    folder: CCDS
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false    # edit the JSON in git, not in the UI
+    options:
+      path: /etc/grafana/dashboards

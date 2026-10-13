@@ -1,0 +1,23 @@
+# LOCAL scrape config (docker compose): no swarm, so no tasks.* DNS.
+# One copy of everything, reached by name.
+
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  # The app's core, by its service name on the shared "proxy" network
+  - job_name: core
+    static_configs:
+      - targets: ["core:8000"]
