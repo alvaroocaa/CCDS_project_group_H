@@ -1,6 +1,6 @@
 server {
     listen 80;
-    server_name app.localhost;
+    server_name app.${DOMAIN};
 
     resolver 127.0.0.11 valid=10s;   # Docker's internal DNS
     set $core   http://core:8000;

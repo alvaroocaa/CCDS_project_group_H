@@ -1,6 +1,8 @@
 services:
   nginx:
     build: ./nginx
+    environment:
+      DOMAIN: localhost
     ports:
       - "80:80"
     networks:
