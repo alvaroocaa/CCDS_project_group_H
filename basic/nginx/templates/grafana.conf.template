@@ -1,6 +1,6 @@
 server {
     listen 80;
-    server_name grafana.localhost;
+    server_name grafana.${DOMAIN};
 
     resolver 127.0.0.11 valid=10s;   # Docker's internal DNS
     set $grafana http://grafana:3000;
