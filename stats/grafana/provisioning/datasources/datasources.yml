@@ -1,0 +1,22 @@
+# Datasources created at startup. ${...} come from the container's environment,
+# so the same image works locally and in production.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus          # fixed uid: the dashboards refer to it
+    type: prometheus
+    access: proxy
+    url: ${PROMETHEUS_URL}
+    isDefault: true
+    editable: false
+
+  # The plugin companion: reads the core app's JSON API directly
+  - name: App API
+    uid: app-api
+    type: yesoreyeram-infinity-datasource
+    url: ${APP_URL}
+    jsonData:
+      allowedHosts:          # Infinity refuses any other host (no SSRF)
+        - ${APP_URL}
+    editable: false

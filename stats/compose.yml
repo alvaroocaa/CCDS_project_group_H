@@ -1,0 +1,69 @@
+# Stats stack, LOCAL version (one machine, Grafana on SQLite, plain passwords).
+# Start everything from the repo root:  make local-up   (creates the "proxy" network)
+# Then open:  http://grafana.localhost          (through nginx; admin / admin)
+#             http://127.0.0.1:3000             (Grafana directly)
+#             http://127.0.0.1:9090/targets     (what Prometheus collects)
+# The "core" target and the leaderboard panel work only while app/ is running too.
+
+services:
+  prometheus:
+    image: ccds/prometheus:1
+    build:
+      context: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.local.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    ports:
+      - "9090:9090"                   # local debugging only
+    volumes:
+      - prometheus_data:/prometheus
+    networks:
+      - default
+      - proxy                         # to reach the app's core:8000
+
+  grafana:
+    image: ccds/grafana:1
+    build:
+      context: grafana
+    environment:
+      - PROMETHEUS_URL=http://prometheus:9090
+      - APP_URL=http://core:8000
+      - GF_SERVER_ROOT_URL=http://grafana.localhost/
+      - GF_SECURITY_ADMIN_PASSWORD=admin   # local only; production uses a Docker secret
+    ports:
+      - "3000:3000"                   # local debugging only
+    volumes:
+      - grafana_data:/var/lib/grafana # SQLite: users, sessions (dashboards are in the image)
+    networks:
+      - default
+      - proxy                         # nginx (basic/nginx/conf.d/grafana.conf) reaches grafana:3000
+
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.6
+    command: ["--docker_only=true", "--housekeeping_interval=15s"]
+    volumes:
+      - /:/rootfs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro   # to list containers and their names
+      - /run/containerd/containerd.sock:/run/containerd/containerd.sock:ro  # container details (Docker 29+)
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+
+networks:
+  proxy:
+    external: true    # created by "make local-up", shared with basic/ and app/
+
+volumes:
+  prometheus_data:
+  grafana_data:

@@ -1,0 +1,138 @@
+# Stats stack, PRODUCTION version for Docker Swarm (stack name "stats").
+#
+#   docker compose -f production.yml build
+#   docker compose -f production.yml push
+#   docker stack deploy -c production.yml stats
+#
+# Expects from the basic stack: the overlay network "proxy" and the registry.
+# Grafana is published by nginx at https://grafana.<DOMAIN>/ (basic/nginx/conf.d/grafana.conf)
+
+services:
+  prometheus:
+    image: ${REGISTRY:-localhost:5000}/ccds/prometheus:1
+    build:
+      context: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - prometheus_data:/prometheus
+    networks:
+      - monitoring     # cadvisor, node-exporter, grafana
+      - proxy          # app_core lives here
+    deploy:
+      replicas: 1      # a time-series DATABASE: two copies can't share one data folder
+      placement:
+        constraints:
+          - node.role == manager   # stays on the same node, so it finds its local volume
+      resources:
+        limits: {cpus: "0.50", memory: 512M}
+
+  grafana:
+    image: ${REGISTRY:-localhost:5000}/ccds/grafana:1
+    build:
+      context: grafana
+    environment:
+      - PROMETHEUS_URL=http://prometheus:9090
+      - APP_URL=http://app_core:8000
+      - GF_SERVER_ROOT_URL=https://grafana.${DOMAIN:-localhost}/
+      - GF_SECURITY_ADMIN_PASSWORD__FILE=/run/secrets/grafana_admin_password
+      # Shared database: logins, users and preferences are the same on every
+      # replica. (With the default SQLite each replica has its own, and you get
+      # logged out whenever the load balancer sends you to another replica.)
+      - GF_DATABASE_TYPE=postgres
+      - GF_DATABASE_HOST=grafana-db:5432
+      - GF_DATABASE_NAME=grafana
+      - GF_DATABASE_USER=grafana
+      - GF_DATABASE_PASSWORD__FILE=/run/secrets/grafana_db_password
+    secrets:
+      - grafana_admin_password
+      - grafana_db_password
+    networks:
+      - monitoring
+      - proxy          # nginx reaches us as stats_grafana:3000
+    deploy:
+      replicas: 2
+      update_config: {parallelism: 1, delay: 10s, order: start-first, failure_action: rollback}
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits: {cpus: "0.50", memory: 512M}   # Grafana 13 idles at ~430 MB: measured with cAdvisor
+
+  grafana-db:
+    image: postgres:17
+    environment:
+      - POSTGRES_DB=grafana
+      - POSTGRES_USER=grafana
+      - POSTGRES_PASSWORD_FILE=/run/secrets/grafana_db_password
+    secrets:
+      - grafana_db_password
+    volumes:
+      - grafana_db_data:/var/lib/postgresql/data
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grafana -d grafana"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      replicas: 1      # DBMS: not scalable
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits: {cpus: "0.50", memory: 256M}
+
+  # One copy on EVERY node (mode: global): each node's containers and machine
+  # are measured where they run. A new node joining the swarm gets one automatically.
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.6
+    command: ["--docker_only=true", "--housekeeping_interval=15s"]
+    volumes:
+      - /:/rootfs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro   # to list containers and their names
+      - /run/containerd/containerd.sock:/run/containerd/containerd.sock:ro  # container details (Docker 29+)
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - monitoring
+    deploy:
+      mode: global
+      resources:
+        limits: {cpus: "0.25", memory: 128M}
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - monitoring
+    deploy:
+      mode: global
+      resources:
+        limits: {cpus: "0.10", memory: 64M}
+
+secrets:
+  grafana_admin_password:
+    file: ./secrets/grafana_admin_password.txt   # git-ignored; see the .example files
+  grafana_db_password:
+    file: ./secrets/grafana_db_password.txt
+
+networks:
+  proxy:
+    external: true     # owned by the basic stack
+  monitoring:
+    driver: overlay
+    internal: true     # nothing in here needs the internet (plugins are baked in)
+
+volumes:
+  prometheus_data:     # metrics history: nice to have, rebuilt by scraping if lost
+  grafana_db_data:     # users and sessions only; dashboards are code in the image
