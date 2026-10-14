@@ -1,0 +1,34 @@
+# PRODUCTION scrape config (swarm).
+#
+# "tasks.<service>" is swarm DNS that returns the IP of EVERY replica. A plain
+# service name returns one virtual IP that load-balances, so Prometheus would
+# only see a random replica each time and the counters would jump around.
+
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Containers: CPU, memory, network of every container on every node
+  - job_name: cadvisor
+    dns_sd_configs:
+      - names: ["tasks.stats_cadvisor"]
+        type: A
+        port: 8080
+
+  # Machines: CPU, memory, disk of every swarm node
+  - job_name: node
+    dns_sd_configs:
+      - names: ["tasks.stats_node-exporter"]
+        type: A
+        port: 9100
+
+  # The app stack's core app (ratings_total, leaderboard_cache_hits_total)
+  - job_name: core
+    dns_sd_configs:
+      - names: ["tasks.app_core"]
+        type: A
+        port: 8000
