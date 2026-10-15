@@ -5,19 +5,43 @@ services:
       - DOMAIN=ccds-group-h.duckdns.org
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
     networks:
       - proxy
     deploy:
       replicas: 2
 
-  registry:
-    image: registry:2
-    ports:
-      - "5050:5000"
+  certbot:
+    image: certbot/certbot:latest
+    environment:
+      DOMAIN: ccds-group-h.duckdns.org
+      EMAIL: your.email@estudiantat.upc.edu
+      LETSENCRYPT_STAGING: "1"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        trap exit TERM
+        while :; do
+          STAGING=""; [ "$$LETSENCRYPT_STAGING" = "1" ] && STAGING="--staging"
+          certbot certonly --webroot -w /var/www/certbot \
+            --cert-name $$DOMAIN \
+            -d app.$$DOMAIN -d grafana.$$DOMAIN -d moodle.$$DOMAIN -d registry.$$DOMAIN \
+            --email $$EMAIL --agree-tos --no-eff-email --non-interactive \
+            --keep-until-expiring $$STAGING \
+            || { echo "certbot failed, retrying in 60s"; sleep 60; continue; }
+          sleep 12h & wait $$!
+        done
     volumes:
-      - registry_data:/var/lib/registry
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
     deploy:
       replicas: 1
+
+  registry:
+    # ... unchanged ...
 
 networks:
   proxy:
@@ -25,8 +49,16 @@ networks:
 
 volumes:
   registry_data:
+    # ... unchanged ...
+  letsencrypt:
     driver: local
     driver_opts:
       type: nfs
       o: addr=172.16.0.4,rw,nfsvers=4
-      device: ":/srv/nfs/basic/registry"
+      device: ":/srv/nfs/basic/letsencrypt"
+  certbot_www:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=172.16.0.4,rw,nfsvers=4
+      device: ":/srv/nfs/basic/certbot-www"

@@ -1,5 +1,6 @@
 server {
-    listen 80;
+    include /etc/nginx/snippets/listen.conf;
+    include /etc/nginx/snippets/acme.conf;
     server_name grafana.${DOMAIN};
 
     resolver 127.0.0.11 valid=10s;   # Docker's internal DNS
