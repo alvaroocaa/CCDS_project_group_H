@@ -2,14 +2,22 @@ server {
     include /etc/nginx/snippets/listen.conf;
     include /etc/nginx/snippets/acme.conf;
     server_name registry.${DOMAIN};
-    client_max_body_size 0;      # image layers can be big
+
+    client_max_body_size 0;          # image layers can be big
+    chunked_transfer_encoding on;
 
     resolver 127.0.0.11 valid=10s;
     set $registry http://registry:5000;
 
     location /v2/ {
+        auth_basic "CCDS registry";
+        auth_basic_user_file /run/secrets/registry_htpasswd;
+        add_header Docker-Distribution-Api-Version registry/2.0 always;
+
         proxy_pass $registry;
         proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 900;
     }

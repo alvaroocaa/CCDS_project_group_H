@@ -9,6 +9,8 @@ services:
     volumes:
       - letsencrypt:/etc/letsencrypt:ro
       - certbot_www:/var/www/certbot:ro
+    secrets:
+      - registry_htpasswd
     networks:
       - proxy
     deploy:
@@ -55,6 +57,10 @@ services:
 networks:
   proxy:
     external: true
+
+secrets:
+  registry_htpasswd:
+    file: ./registry/htpasswd
 
 volumes:
   registry_data:
