@@ -41,7 +41,16 @@ services:
       replicas: 1
 
   registry:
-    # ... unchanged ...
+    image: registry:2
+    ports:
+      - "5050:5000"
+    volumes:
+      - registry_data:/var/lib/registry
+    networks:
+      - default
+      - proxy
+    deploy:
+      replicas: 1
 
 networks:
   proxy:
@@ -49,7 +58,11 @@ networks:
 
 volumes:
   registry_data:
-    # ... unchanged ...
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=172.16.0.4,rw,nfsvers=4
+      device: ":/srv/nfs/basic/registry"
   letsencrypt:
     driver: local
     driver_opts:
