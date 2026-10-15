@@ -19,7 +19,7 @@ services:
     environment:
       DOMAIN: ccds-group-h.duckdns.org
       EMAIL: your.email@estudiantat.upc.edu
-      LETSENCRYPT_STAGING: "1"
+      LETSENCRYPT_STAGING: "0"
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
