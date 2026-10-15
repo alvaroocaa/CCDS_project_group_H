@@ -1,5 +1,5 @@
 #!/bin/sh
-# Picks HTTP or HTTPS mode depending on whether the certificate exists.
+# Picks HTTP or HTTPS mode, and reloads nginx whenever the certificate changes.
 CERT=/etc/letsencrypt/live/${DOMAIN}/fullchain.pem
 KEY=/etc/letsencrypt/live/${DOMAIN}/privkey.pem
 
@@ -26,18 +26,18 @@ EOF
   fi
 }
 
-MODE=$(write_conf)
-echo "tls-mode: $MODE"
+# mode + certificate timestamp: changes on issue, renewal or replacement
+state() { echo "$(write_conf):$(stat -L -c %Y "$CERT" 2>/dev/null)"; }
 
-# Every minute: switch mode when the cert appears; every 12h: reload to pick up renewals
+STATE=$(state)
+echo "tls-mode: $STATE"
+
 (
-  i=0
   while sleep 60; do
-    NEW=$(write_conf)
-    i=$((i+1))
-    if [ "$NEW" != "$MODE" ] || [ $((i % 720)) -eq 0 ]; then
-      MODE=$NEW
-      echo "tls-mode: $MODE (reloading)"
+    NEW=$(state)
+    if [ "$NEW" != "$STATE" ]; then
+      STATE=$NEW
+      echo "tls-mode: $STATE (reloading)"
       nginx -s reload
     fi
   done
