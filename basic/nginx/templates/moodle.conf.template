@@ -1,5 +1,6 @@
 server {
-    listen 80;
+    include /etc/nginx/snippets/listen.conf;
+    include /etc/nginx/snippets/acme.conf;
     server_name moodle.${DOMAIN};
     client_max_body_size 100m;   # Moodle file uploads
 
