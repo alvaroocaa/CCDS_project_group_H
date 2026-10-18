@@ -1,0 +1,113 @@
+# Atenea stack (Moodle), PRODUCTION version for Docker Swarm. Stack name "atenea".
+#
+#   docker compose -f atenea/production.yml build
+#   docker compose -f atenea/production.yml push
+#   docker stack deploy -c atenea/production.yml atenea
+#
+# Expects: overlay network "proxy" (basic stack), registry at 127.0.0.1:5050,
+# NFS folder /srv/nfs/atenea/moodledata on node1, one node labelled db=true,
+# and the secret files in atenea/secrets/ (copy the .example files, set real passwords).
+# nginx publishes it at https://moodle.<DOMAIN> (basic/nginx/templates/moodle.conf.template).
+
+services:
+  mariadb:
+    image: mariadb:11.4
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MARIADB_ROOT_PASSWORD_FILE: /run/secrets/moodle_db_root_password
+      MARIADB_DATABASE: moodle
+      MARIADB_USER: moodle_user
+      MARIADB_PASSWORD_FILE: /run/secrets/moodle_db_password
+    secrets:
+      - moodle_db_root_password
+      - moodle_db_password
+    volumes:
+      - db_data:/var/lib/mysql             # local volume: databases on NFS are slow and risky
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    networks:
+      - backend
+    deploy:
+      replicas: 1                          # DBMS: not scalable by adding replicas
+      placement:
+        constraints:
+          - node.labels.db == true         # always the same node, so it finds its volume
+      resources:
+        limits: {cpus: "1.0", memory: 768M}
+
+  moodle:
+    image: ${REGISTRY:-127.0.0.1:5050}/ccds/moodle:1
+    build:
+      context: .
+    environment:
+      MOODLE_WWWROOT: https://moodle.ccds-group-h.duckdns.org
+      MOODLE_SSLPROXY: "1"                 # TLS ends at nginx
+      MOODLE_DB_HOST: mariadb
+      MOODLE_DB_NAME: moodle
+      MOODLE_DB_USER: moodle_user
+      MOODLE_DB_PASSWORD_FILE: /run/secrets/moodle_db_password
+      MOODLE_ADMIN_PASSWORD_FILE: /run/secrets/moodle_admin_password
+    secrets:
+      - moodle_db_password
+      - moodle_admin_password
+    volumes:
+      - moodledata:/var/www/moodledata     # NFS: shared by every replica on every node
+    networks:
+      backend:
+      proxy:
+        aliases: [moodle]                  # nginx reaches it as moodle:80
+    deploy:
+      replicas: 2
+      update_config: {parallelism: 1, delay: 10s, order: start-first, failure_action: rollback}
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits: {cpus: "1.0", memory: 768M}
+
+  cron:                                    # Moodle's scheduled tasks: a cron job, 1 replica
+    image: ${REGISTRY:-127.0.0.1:5050}/ccds/moodle:1
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until [ -f /var/www/moodledata/config.php.saved ]; do echo "waiting for Moodle install"; sleep 15; done
+        cp /var/www/moodledata/config.php.saved /var/www/html/config.php
+        chmod 644 /var/www/html/config.php
+        CRON=$$(ls /var/www/html/admin/cli/cron.php /var/www/html/public/admin/cli/cron.php 2>/dev/null | head -1)
+        while :; do su -s /bin/sh -c "php $$CRON" www-data; sleep 60; done
+    volumes:
+      - moodledata:/var/www/moodledata
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      resources:
+        limits: {cpus: "0.5", memory: 512M}
+
+secrets:
+  moodle_db_root_password:
+    file: ./secrets/db_root_password.txt
+  moodle_db_password:
+    file: ./secrets/db_password.txt
+  moodle_admin_password:
+    file: ./secrets/admin_password.txt
+
+networks:
+  proxy:
+    external: true
+  backend:
+    driver: overlay
+    internal: true                         # no internet, nginx can't reach the database
+
+volumes:
+  db_data:
+  moodledata:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=172.16.0.4,rw,nfsvers=4
+      device: ":/srv/nfs/atenea/moodledata"

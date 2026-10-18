@@ -20,7 +20,7 @@ services:
     image: certbot/certbot:latest
     environment:
       DOMAIN: ccds-group-h.duckdns.org
-      EMAIL: your.email@estudiantat.upc.edu
+      EMAIL: alvaro.castillejo@estudiantat.upc.edu
       LETSENCRYPT_STAGING: "0"
     entrypoint: ["/bin/sh", "-c"]
     command:

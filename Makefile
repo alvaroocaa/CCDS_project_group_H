@@ -47,8 +47,11 @@ registry: swarm-network
 release:
 	docker build -t $(REG)/nginx:1 basic/nginx
 	docker push $(REG)/nginx:1
+	docker compose -f atenea/production.yml build
+	docker compose -f atenea/production.yml push
 
 deploy: swarm-network
 	docker stack deploy -c basic/production.yml basic
+	docker stack deploy -c atenea/production.yml atenea
 
 .PHONY: secrets local-up status local-down local-clean swarm-network registry release deploy
