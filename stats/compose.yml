@@ -14,8 +14,6 @@ services:
       - --config.file=/etc/prometheus/prometheus.local.yml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=7d
-    ports:
-      - "9090:9090"                   # local debugging only
     volumes:
       - prometheus_data:/prometheus
     networks:
@@ -31,8 +29,6 @@ services:
       - APP_URL=http://core:8000
       - GF_SERVER_ROOT_URL=http://grafana.localhost/
       - GF_SECURITY_ADMIN_PASSWORD=admin   # local only; production uses a Docker secret
-    ports:
-      - "3000:3000"                   # local debugging only
     volumes:
       - grafana_data:/var/lib/grafana # SQLite: users, sessions (dashboards are in the image)
     networks:

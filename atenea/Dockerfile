@@ -20,3 +20,7 @@ RUN wget https://download.moodle.org/download.php/direct/stable503/moodle-latest
 RUN sed -i 's#/var/www/html#/var/www/html/public#g' /etc/apache2/sites-available/000-default.conf
 
 RUN echo "max_input_vars=5000" > /usr/local/etc/php/conf.d/moodle.ini
+
+COPY moodle-entrypoint.sh /usr/local/bin/moodle-entrypoint.sh
+RUN chmod +x /usr/local/bin/moodle-entrypoint.sh
+CMD ["/usr/local/bin/moodle-entrypoint.sh"]
