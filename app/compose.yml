@@ -1,7 +1,6 @@
 # App stack, LOCAL version (no TLS, no NFS, no nginx yet).
-# Run from this folder:  docker compose up -d --build
-# Then try:              curl localhost:8000/        (core app)
-#                        open http://localhost:8080   (static page)
+# Start everything from the repo root:  make local-up   (creates the "proxy" network)
+
 
 services:
   core:
