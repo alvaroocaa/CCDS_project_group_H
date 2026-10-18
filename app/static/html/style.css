@@ -5,3 +5,8 @@ table { width: 100%; border-collapse: collapse; background: #fff; }
 th, td { padding: .6rem; border-bottom: 1px solid #dde3ea; text-align: left; }
 th { background: #0079c2; color: #fff; }
 #status { color: #a33; }
+form { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
+input, select, button { padding: .5rem; font: inherit; border: 1px solid #dde3ea; border-radius: 4px; }
+input { flex: 1 1 10rem; }
+button { background: #0079c2; color: #fff; border: 0; cursor: pointer; }
+#msg { color: #2a7a2a; }

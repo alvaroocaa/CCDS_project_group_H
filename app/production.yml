@@ -47,6 +47,20 @@ services:
         limits: {cpus: "0.50", memory: 256M}
       placement:
         max_replicas_per_node: 2  # never put all eggs in one basket
+  smtp:
+    image: axllent/mailpit:latest
+    environment:
+      - MP_SMTP_AUTH_ACCEPT_ANY=1
+      - MP_SMTP_AUTH_ALLOW_INSECURE=1
+      # To forward to a real provider (e.g. UPC or Gmail SMTP), set the MP_SMTP_RELAY_* variables
+      # (host, port, username, password) – see Mailpit's "SMTP relay" docs.
+    networks:
+      - backend                     # core reaches it here
+      - proxy                       # not internal: needed to reach an external provider
+    deploy:
+      replicas: 1                   # one mailbox: messages are stored inside this container
+      resources:
+        limits: {cpus: "0.25", memory: 64M}
 
   static:
     image: ${REGISTRY:-localhost:5000}/ccds/static:1

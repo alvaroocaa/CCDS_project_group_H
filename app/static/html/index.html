@@ -9,22 +9,72 @@
 <body>
   <main>
     <h1>Page Ratings</h1>
-    <p>Top rated pages, served live by the core app.</p>
-    <table id="board"><tr><th>Page</th><th>Average</th><th>Votes</th></tr></table>
+    <p>Rate a web page and see the top rated pages, live from the core app.</p>
+
+    <form id="rate">
+      <input id="page" placeholder="Page, e.g. upc.edu" required maxlength="200">
+      <select id="stars">
+        <option value="5">★★★★★ 5</option>
+        <option value="4">★★★★ 4</option>
+        <option value="3">★★★ 3</option>
+        <option value="2">★★ 2</option>
+        <option value="1">★ 1</option>
+      </select>
+      <input id="comment" placeholder="Comment (optional)" maxlength="500">
+      <button type="submit">Rate</button>
+    </form>
+    <p id="msg"></p>
+
+    <table id="board">
+      <thead><tr><th>Page</th><th>Average</th><th>Votes</th></tr></thead>
+      <tbody></tbody>
+    </table>
     <p id="status"></p>
   </main>
   <script>
-    // Relative URL: works once nginx routes /app/ to the core app.
-    fetch("/app/leaderboard")
-      .then(r => r.json())
-      .then(rows => rows.forEach(r => {
-        document.getElementById("board").insertAdjacentHTML("beforeend",
-          `<tr><td>${r.page}</td><td>${r.avg}</td><td>${r.votes}</td></tr>`);
-      }))
-      .catch(() => {
-        document.getElementById("status").textContent =
-          "Leaderboard not reachable (expected until nginx routes /app/).";
-      });
+    const $ = id => document.getElementById(id);
+
+    // Build rows with textContent: user input is never interpreted as HTML
+    function load() {
+      fetch("/app/leaderboard")
+        .then(r => r.json())
+        .then(rows => {
+          $("board").tBodies[0].replaceChildren(...rows.map(r => {
+            const tr = document.createElement("tr");
+            for (const value of [r.page, r.avg, r.votes]) {
+              const td = document.createElement("td");
+              td.textContent = value;
+              tr.append(td);
+            }
+            return tr;
+          }));
+          $("status").textContent = "";
+        })
+        .catch(() => { $("status").textContent = "Leaderboard not reachable."; });
+    }
+
+    $("rate").addEventListener("submit", e => {
+      e.preventDefault();
+      fetch("/app/ratings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          page: $("page").value.trim(),
+          stars: Number($("stars").value),
+          comment: $("comment").value.trim()
+        })
+      })
+        .then(r => {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          $("msg").textContent = "Thanks! Your rating was stored.";
+          e.target.reset();
+          load();
+        })
+        .catch(err => { $("msg").textContent = "Could not store the rating (" + err.message + ")."; });
+    });
+
+    load();
+    setInterval(load, 10000);   // the feeder keeps adding ratings
   </script>
 </body>
 </html>
