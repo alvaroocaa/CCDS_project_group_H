@@ -36,6 +36,7 @@ DB_DSN = (
 )
 cache = redis.Redis(host=os.environ.get("REDIS_HOST", "redis"), port=6379, socket_timeout=1)
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "25"))
 ALERT_TO = os.environ.get("ALERT_TO", "admin@example.test")
 
 RATINGS = Counter("ratings_total", "Ratings received", ["stars"])
@@ -67,7 +68,7 @@ def send_alert(page, comment):
     msg["To"] = ALERT_TO
     msg.set_content(comment or "(no comment)")
     try:
-        with smtplib.SMTP(SMTP_HOST, 25, timeout=3) as s:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=3) as s:
             s.send_message(msg)
     except OSError as e:  # mail is best effort, never break the request
         app.logger.warning("SMTP failed: %s", e)

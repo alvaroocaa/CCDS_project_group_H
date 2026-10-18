@@ -1,0 +1,22 @@
+server {
+    include /etc/nginx/snippets/listen.conf;
+    include /etc/nginx/snippets/acme.conf;
+    server_name mail.${DOMAIN};
+
+    resolver 127.0.0.11 valid=10s;
+    set $mail http://smtp:8025;
+
+    location / {
+        proxy_pass $mail;
+        proxy_set_header Host $host;
+    }
+
+    # Mailpit's live updates use a websocket
+    location /api/events {
+        proxy_pass $mail;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+    }
+}

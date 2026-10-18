@@ -21,6 +21,7 @@ local-up: secrets
 	@echo "  http://grafana.localhost:$(HTTP_PORT)      Grafana"
 	@echo "  http://moodle.localhost:$(HTTP_PORT)       Moodle"
 	@echo "Check progress with: make status"
+	@echo "  http://mail.localhost:$(HTTP_PORT)         Mailbox (alerts for 1-star ratings)"
 
 status:
 	@docker ps --format 'table {{.Names}}\t{{.Status}}'

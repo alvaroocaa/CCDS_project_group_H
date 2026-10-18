@@ -1,6 +1,8 @@
-# App stack, LOCAL version (no TLS, no NFS, no nginx yet).
-# Start everything from the repo root:  make local-up   (creates the "proxy" network)
-
+# App stack, LOCAL version (no TLS, no NFS).
+# Start everything from the repo root:  make local-up
+# Then open:  http://app.localhost          (core app, JSON)
+#             http://app.localhost/static/  (rating page)
+#             http://mail.localhost         (mailbox: alerts for 1-star ratings)
 
 services:
   core:
@@ -13,7 +15,8 @@ services:
       - DB_USER=ratings
       - DB_PASSWORD=ratings         # local only; production uses a Docker secret
       - REDIS_HOST=redis
-      - SMTP_HOST=smtp              # provided by part D; mail just fails quietly until then
+      - SMTP_HOST=smtp
+      - SMTP_PORT=1025              # Mailpit's SMTP port
     depends_on:
       - db
       - redis
@@ -76,6 +79,15 @@ services:
       - db
     networks:
       - backend
+
+  smtp:
+    image: axllent/mailpit:latest   # SMTP relay: catches mails locally, web mailbox on 8025
+    environment:
+      - MP_SMTP_AUTH_ACCEPT_ANY=1
+      - MP_SMTP_AUTH_ALLOW_INSECURE=1
+    networks:
+      - backend                     # core sends mail here
+      - proxy                       # nginx shows the mailbox at mail.localhost
 
 networks:
   backend:
