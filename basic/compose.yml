@@ -4,7 +4,7 @@ services:
     environment:
       DOMAIN: localhost
     ports:
-      - "80:80"
+      - "${HTTP_PORT:-80}:80"
     networks:
       - proxy
 

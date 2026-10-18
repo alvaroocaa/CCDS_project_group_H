@@ -15,8 +15,6 @@ services:
       - DB_PASSWORD=ratings         # local only; production uses a Docker secret
       - REDIS_HOST=redis
       - SMTP_HOST=smtp              # provided by part D; mail just fails quietly until then
-    ports:
-      - "8000:8000"                 # local testing only; in production nginx is the only way in
     depends_on:
       - db
       - redis
@@ -58,8 +56,6 @@ services:
     image: ccds/static:1
     build:
       context: static
-    ports:
-      - "8080:80"                   # local testing only
     networks:
       - default
       - proxy
