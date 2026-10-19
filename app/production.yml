@@ -25,6 +25,7 @@ services:
       - DB_PASSWORD_FILE=/run/secrets/db_password   # password never in env or image
       - REDIS_HOST=redis
       - SMTP_HOST=smtp
+      - SMTP_PORT=1025
     secrets:
       - db_password
     networks:
