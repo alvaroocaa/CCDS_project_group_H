@@ -29,7 +29,7 @@ services:
       - grafana_data:/var/lib/grafana # SQLite: users, sessions (dashboards are in the image)
     networks:
       - default
-      - proxy                         # nginx (basic/nginx/conf.d/grafana.conf) reaches grafana:3000
+      - proxy                        
 
   cadvisor:
     image: ghcr.io/google/cadvisor:v0.60.6

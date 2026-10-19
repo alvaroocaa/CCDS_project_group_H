@@ -149,7 +149,7 @@ Files: `basic/`, `scripts/`, `Makefile`.
 
 ### App – Rating application
 
-Files: `app/`. Detailed report: [`app_stack_report.pdf`](app_stack_report.pdf) and [`app/README.md`](app/README.md).
+Files: `app/`.
 
 The application lets users rate web pages from 1 to 5 stars and displays a live leaderboard.
 
@@ -190,7 +190,7 @@ The application lets users rate web pages from 1 to 5 stars and displays a live 
 
 ### Stats – Monitoring
 
-Files: `stats/`. Details: [`stats/README.md`](stats/README.md).
+Files: `stats/`.
 
 | Service | Replicas | Purpose |
 |---|---:|---|
@@ -416,7 +416,7 @@ Tests performed:
 | HTTPS | valid Let's Encrypt certificate, HTTP → 301 HTTPS |
 | Registry | `401` without password, `docker login` succeeds with it |
 | Firewall (from outside) | 5050, 2049, 2377, 3000, 8080 closed |
-| App backup and restore | table dropped and restored from the last dump (see `app_stack_report.pdf`) |
+| App backup and restore | table dropped and restored from the last dump |
 | Grafana | 2 replicas, 10 of 10 requests with the same session cookie accepted |
 | Moodle | installs itself, 2 replicas share one installation, no reinstall after restart |
 
@@ -459,7 +459,7 @@ Tests performed:
 | compose.yml files | `basic/`, `app/`, `stats/`, `atenea/` |
 | production.yml files | same folders |
 | Dockerfiles + build files | `basic/nginx/`, `app/core/`, `app/auto/`, `app/static/`, `app/backup/`, `stats/grafana/`, `stats/prometheus/`, `atenea/` |
-| Documentation of deployment, data and backups | this README, `app_stack_report.pdf`, `stats/README.md` |
+| Documentation of deployment, data and backups | this README |
 | Swarm with ≥ 3 nodes | [Production deployment](#production-deployment-docker-swarm-on-azure) |
 | Shared disk between nodes | NFS ([basic](#basic--front-end-and-infrastructure)) |
 | Front end proxying to every service | nginx templates |
