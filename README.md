@@ -23,10 +23,8 @@ By:
 7. [Scalability](#scalability)
 8. [Security](#security)
 9. [Evidences](#evidences)
-10. [Lessons learned](#lessons-learned)
-11. [Known limitations](#known-limitations)
-12. [Requirements checklist](#requirements-checklist)
-13. [Repository layout](#repository-layout)
+10. [Known limitations](#known-limitations)
+11. [Repository layout](#repository-layout)
 
 ---
 
@@ -50,8 +48,7 @@ Each stack has two compose files, as required:
 
 ## Run locally
 
-**Requirements:** Docker (running) and `make` (Mac: Xcode command line tools · Linux: `sudo apt install make` ·
-Windows: use WSL2). To start the environment locally execute the following command:
+**Requirements:** Docker (running) and `make`. To start the environment locally execute the following command:
 
 ```bash
 make local-up
@@ -79,11 +76,11 @@ Every other service is reachable only through nginx. The `make` commands for the
 ```bash
 make status                    # check container status
 make local-down                # stop containers but keep data
-make local-clean               # stop containers and delete all data (next start is a fresh install)
-HTTP_PORT=8081 make local-up   # if port 80 is busy -> http://app.localhost:8081, etc.
+make local-clean               # stop containers and delete all data
+HTTP_PORT=8081 make local-up   # if port 80 is busy indicate desired port -> http://app.localhost:8081
 ```
 
-**Quick demo:** rate a page with 1 star on http://app.localhost/static/ → the leaderboard updates →
+**Quick demo:** after `make local-up` rate a page with 1 star on http://app.localhost/static/ → the leaderboard updates →
 an alert mail appears at http://mail.localhost → the rating shows up in Grafana's "Ratings per minute" panel.
 
 ---
@@ -126,12 +123,12 @@ when the other stacks are not deployed yet (it answers 502 until they are).
 
 Files: `basic/`, `scripts/`, `Makefile`.
 
-- **Nginx** (`basic/nginx/`): configuration baked into the image (one template per subdomain plus
+- **Nginx** (`basic/nginx/`): image configuration (one template per subdomain plus
   snippets), 2 replicas in production. The script `30-tls-mode.sh` runs at start-up:
   - no certificate (local, or before the first issue) → **HTTP mode**, port 80;
   - certificate present → **HTTPS mode**, port 443 with HTTP/2, and port 80 only answers the
-    Let's Encrypt challenge and redirects everything else to HTTPS;
-  - it checks the certificate file every minute and reloads nginx when it appears or changes (renewal).
+    Let's Encrypt and redirects everything else to HTTPS;
+  - it checks the certificate file every minute and reloads nginx when it appears or changes.
 - **Let's Encrypt** (`certbot` service): one certificate for `app.`, `grafana.`, `moodle.` and `registry.`,
   using the HTTP-01 webroot challenge. It runs `certbot certonly --keep-until-expiring` in a loop every
   12 hours, so the same command issues and renews. Certificates and the challenge folder are on NFS, so
@@ -201,7 +198,7 @@ Files: `stats/`.
 | Grafana DB | 1 | Shared Postgres for Grafana users and sessions |
 
 - **Observability as code:** nothing is configured by clicking in the UI. Datasources, dashboards and the
-  plugin are files baked into the image, and UI edits are disabled:
+  plugin are files configured into the image, and UI edits are disabled:
 
   | File | What it defines |
   |---|---|
@@ -211,7 +208,7 @@ Files: `stats/`.
   | `grafana/dashboards/ccds-overview.json` | The dashboard |
   | `grafana/Dockerfile` | Grafana version + plugin version |
 
-- **"Surprise" plugin – Infinity:** turns any HTTP API into a Grafana datasource. It reads the core app's
+- **Plugin – Infinity:** turns any HTTP API into a Grafana datasource. It reads the core app's
   `/leaderboard`, so the dashboard shows **business data** (best rated pages, live) next to the technical
   metrics, without any exporter or extra code in the app. Installed at build time, limited by
   `allowedHosts` to the app's URL.
@@ -422,25 +419,6 @@ Tests performed:
 
 ---
 
-## Lessons learned
-
-- **Swarm pauses a failed rolling update** instead of finishing it: updating the registry and nginx at
-  the same time made one node fail to pull the new nginx image.
-- **`docker service update --force` keeps the old image digest;** only `docker stack deploy` resolves a
-  re-pushed tag again.
-- **Let's Encrypt staging first:** real certificates are rate-limited after failed attempts.
-- **nginx kept the old certificate in memory** after it was replaced, so the reload now follows the
-  certificate file's timestamp, not only whether it exists.
-- **`pg_dump | gzip` hides failures:** the shell only checks `gzip`'s exit code, so a failed dump became
-  an empty "backup". `pg_dump` now compresses by itself and its own exit code decides.
-- **Moodle 5.x** moved the web root to `public/` and ships a `public/config.php` stub, which first
-  confused the auto-install check; its CLI installer also writes `config.php` readable only by root.
-- **Grafana 13 needs more memory than expected** (measured with cAdvisor), and **cAdvisor needs the
-  containerd socket** with Docker 29.
-- **Ports published "for debugging" leak into the final setup:** locally only nginx publishes a port now.
-
----
-
 ## Known limitations
 
 - **Single NFS server on node1:** if node1 fails, shared storage is unavailable. A replicated filesystem
@@ -449,27 +427,6 @@ Tests performed:
   on another node.
 - **Moodle backups are manual** (see [Data management](#data-management-and-backups)).
 - **Mailpit** only forwards to a real mail provider once its `MP_SMTP_RELAY_*` credentials are configured.
-
----
-
-## Requirements checklist
-
-| Requirement (statement) | Where |
-|---|---|
-| compose.yml files | `basic/`, `app/`, `stats/`, `atenea/` |
-| production.yml files | same folders |
-| Dockerfiles + build files | `basic/nginx/`, `app/core/`, `app/auto/`, `app/static/`, `app/backup/`, `stats/grafana/`, `stats/prometheus/`, `atenea/` |
-| Documentation of deployment, data and backups | this README |
-| Swarm with ≥ 3 nodes | [Production deployment](#production-deployment-docker-swarm-on-azure) |
-| Shared disk between nodes | NFS ([basic](#basic--front-end-and-infrastructure)) |
-| Front end proxying to every service | nginx templates |
-| Let's Encrypt TLS | certbot service |
-| Registry | `registry:2` + nginx auth |
-| Core app, db, dump backup, static server, cache, SMTP, feeder | `app/` |
-| Grafana as code + plugin | `stats/` (Infinity) |
-| Moodle + database | `atenea/` |
-| No extra steps besides build and deploy | `make local-up` / `make release && make deploy` |
-| All services scalable except cron jobs and DBMS | [Scalability](#scalability) |
 
 ---
 
